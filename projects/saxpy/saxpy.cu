@@ -3,14 +3,109 @@ SAXPY example By Mark Harris
 https://developer.nvidia.com/blog/easy-introduction-cuda-c-and-c/
 */
 
-#include <stdio.h>
+#include <saxpy.h>
 
 __global__ void saxpy(int n, float a, float *x, float *y)
 {
-  int i = blockIdx.x*blockDim.x + threadIdx.x;
-  if (i < n) y[i] = a*x[i] + y[i];
+    int i = blockIdx.x*blockDim.x + threadIdx.x;
+    if (i < n) y[i] = a*x[i] + y[i];
 }
 
+
+
+__host__ void copyFromHostToDevice(float *x, float *y, float *d_x, float *d_y, int N)
+{
+    size_t size = N * sizeof(float);
+
+    cudaError_t err = cudaMemcpy(d_x, x, size, cudaMemcpyHostToDevice);
+    if (err != cudaSuccess)
+    {
+        fprintf(stderr, "Failed to copy x from host to device (error code %s)!\n", cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+
+    err = cudaMemcpyToSymbol(d_y, y, size, cudaMemcpyHostToDevice);
+    if (err != cudaSuccess)
+    {
+        fprintf(stderr, "Failed to copy y from host to device (error code %s)!\n", cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+}
+
+__host__ void executeKernel(float *d_x, float *d_y, int N)
+{
+    // Launch the search CUDA Kernel
+    saxpy<<<(N+255)/256, 256>>>(N, 2.0f, d_x, d_y);
+    cudaError_t err = cudaGetLastError();
+
+    if (err != cudaSuccess)
+    {
+        fprintf(stderr, "Failed to launch vectorAdd kernel (error code %s)!\n", cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+}
+
+// Report max error
+__host__ void maxError(int N, float *y)
+{
+    float maxError = 0.0f;
+    for (int i = 0; i < N; i++)
+        maxError = max(maxError, abs(y[i]-4.0f));
+    printf("Max error: %f\n", maxError);
+}
+
+// Retrieve results
+__host__ void copyFromDeviceToHost(float *y, float *d_y, int N)
+{
+    cout << "Copying from Device to Host\n";
+    // Copy the device result int array in device memory to the host result int array in host memory.
+    size_t size = N * sizeof(int);
+
+    cudaError_t err = cudaMemcpy(y, d_y, size, cudaMemcpyDeviceToHost);
+
+    if (err != cudaSuccess)
+    {
+        fprintf(stderr, "Failed to copy array d_i from device to host (error code %s)!\n", cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+}
+
+// Free memory
+__host__ void deallocateMemory(float *x, float *y, float *d_x, float *d_y)
+{
+    cudaError_t err = cudaFree(d_x);
+    if (err != cudaSuccess)
+    {
+        fprintf(stderr, "Failed to free device float variable d_x (error code %s)!\n", cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+
+    err = cudaFree(d_y);
+    if (err != cudaSuccess)
+    {
+        fprintf(stderr, "Failed to free device float variable d_y (error code %s)!\n", cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+
+    free(x);
+    free(y);
+}
+
+__host__ void cleanUpDevice()
+{
+    // cudaDeviceReset causes the driver to clean up all state. While
+    // not mandatory in normal operation, it is good practice.  It is also
+    // needed to ensure correct operation when the application is being
+    // profiled. Calling cudaDeviceReset causes all profile data to be
+    // flushed before the application exits
+    cudaError_t err = cudaDeviceReset();
+
+    if (err != cudaSuccess)
+    {
+        fprintf(stderr, "Failed to deinitialize the device! error=%s\n", cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+}
 
 int main(void)
 {
@@ -33,23 +128,14 @@ int main(void)
     }
 
     // Initialize device arrays
-    cudaMemcpy(d_x, x, N*sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_y, y, N*sizeof(float), cudaMemcpyHostToDevice);
+    copyFromHostToDevice(x, y, d_x, d_y, N);
 
     // Perform SAXPY on 1M elements
-    saxpy<<<(N+255)/256, 256>>>(N, 2.0f, d_x, d_y);
+    executeKernel(d_x, d_y, N);
+    copyFromDeviceToHost(y, d_y, N);
 
-    // Retrive result back to host
-    cudaMemcpy(y, d_y, N*sizeof(float), cudaMemcpyDeviceToHost);
+    maxError(N, y);
 
-    float maxError = 0.0f;
-    for (int i = 0; i < N; i++)
-        maxError = max(maxError, abs(y[i]-4.0f));
-    printf("Max error: %f\n", maxError);
-
-    // Cleaning up memories
-    cudaFree(d_x);
-    cudaFree(d_y);
-    free(x);
-    free(y);
+    deallocateMemory(x, y, d_x, d_y);
+    cleanUpDevice();
 }
