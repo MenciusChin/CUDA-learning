@@ -2,9 +2,9 @@
 #include <vector>
 #include <string>
 #include <cmath>
-#include <pasl>
 
 using namespace std;
+
 
 long fib_seq (long n) {
   long result;
