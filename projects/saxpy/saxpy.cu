@@ -1,17 +1,22 @@
-/*
-SAXPY example By Mark Harris
-https://developer.nvidia.com/blog/easy-introduction-cuda-c-and-c/
-*/
+// SAXPY example By Mark Harris
 
-#include <saxpy.h>
+#include <stdio.h>
+#include <iostream>
+#include <tuple>
+#include <string>
+#include <fstream>
+#include <vector>
+#include <utility>   // std::pair
+#include <stdexcept> // std::runtime_error
+#include <sstream>   // std::stringstream
+#include <ctime>
+using namespace std;
 
 __global__ void saxpy(int n, float a, float *x, float *y)
 {
     int i = blockIdx.x*blockDim.x + threadIdx.x;
     if (i < n) y[i] = a*x[i] + y[i];
 }
-
-
 
 __host__ void copyFromHostToDevice(float *x, float *y, float *d_x, float *d_y, int N)
 {
@@ -57,7 +62,7 @@ __host__ void maxError(int N, float *y)
 // Retrieve results
 __host__ void copyFromDeviceToHost(float *y, float *d_y, int N)
 {
-    cout << "Copying from Device to Host\n";
+    std::cout << "Copying from Device to Host\n";
     // Copy the device result int array in device memory to the host result int array in host memory.
     size_t size = N * sizeof(int);
 
