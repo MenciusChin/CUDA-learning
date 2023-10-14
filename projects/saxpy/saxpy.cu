@@ -1,4 +1,5 @@
 // SAXPY example By Mark Harris
+// nvcc -o saxpy saxpy.cu -ccbin "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.37.32822\bin\Hostx86\x64" -lcuda
 
 #include <stdio.h>
 #include <iostream>
